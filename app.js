@@ -867,7 +867,7 @@ function enviarWhatsapp() {
     msg += '━━━━━━━━━━━━━━━━━━━━\n';
   }
 
-  msg += '\n_Orçamento gerado pelo OrcaFácil_ 📋';
+  msg += '\n_Orçamento gerado pelo Orçamentos Mactel_ 📋';
   window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
 }
 

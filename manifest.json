@@ -1,6 +1,6 @@
 {
-  "name": "Mactel Orçamentos",
-  "short_name": "Mactel",
+  "name": "Orçamentos Mactel",
+  "short_name": "Orç Mactel",
   "description": "Gerencie orçamentos de cerca elétrica, alarme, câmeras e muito mais.",
   "start_url": "./index.html",
   "display": "standalone",

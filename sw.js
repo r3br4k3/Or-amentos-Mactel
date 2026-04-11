@@ -3,7 +3,7 @@
    Cache-first para funcionamento offline
 ============================================= */
 
-const CACHE_NAME = 'orcafacil-v7';
+const CACHE_NAME = 'orcafacil-v8';
 const ASSETS = [
   './',
   './index.html',
