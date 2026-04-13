@@ -82,6 +82,28 @@ let orcamentoAtual = null;
 let categoriaAtiva = null;
 let searchProdutoTimer = null;
 let db = null;
+let syncCatalogoTimer = null;
+let syncOrcamentosTimer = null;
+
+async function apiRequest(url, options = {}) {
+  const response = await fetch(url, {
+    headers: {
+      'Content-Type': 'application/json',
+      ...(options.headers || {})
+    },
+    ...options
+  });
+
+  if (!response.ok) {
+    throw new Error(`Falha de API: ${response.status}`);
+  }
+
+  const contentType = response.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
+    return response.json();
+  }
+  return null;
+}
 
 function salvarTema(tema) {
   localStorage.setItem('orcafacil_tema', tema);
@@ -117,16 +139,13 @@ function salvarCatalogo() {
     ...cat,
     produtos: cat.produtos.map(p => ({ ...p, fotoUrl: null }))
   }));
-  localStorage.setItem('orcafacil_catalogo', JSON.stringify(sem));
-}
-
-function carregarCatalogo() {
-  const raw = localStorage.getItem('orcafacil_catalogo');
-  if (raw) {
-    catalogo = JSON.parse(raw);
-  } else {
-    catalogo = JSON.parse(JSON.stringify(CATALOGO_PADRAO));
-  }
+  clearTimeout(syncCatalogoTimer);
+  syncCatalogoTimer = setTimeout(() => {
+    apiRequest('/api/catalogo', {
+      method: 'PUT',
+      body: JSON.stringify({ catalogo: sem })
+    }).catch(() => mostrarToast('Falha ao sincronizar catálogo no banco.'));
+  }, 200);
 }
 
 function salvarOrcamentos() {
@@ -134,16 +153,33 @@ function salvarOrcamentos() {
     ...o,
     midiasLocal: o.midiasLocal || o.fotosLocal || []
   }));
-  localStorage.setItem('orcafacil_orcamentos', JSON.stringify(sem));
+  clearTimeout(syncOrcamentosTimer);
+  syncOrcamentosTimer = setTimeout(() => {
+    apiRequest('/api/orcamentos', {
+      method: 'PUT',
+      body: JSON.stringify({ orcamentos: sem })
+    }).catch(() => mostrarToast('Falha ao sincronizar orçamentos no banco.'));
+  }, 200);
 }
 
-function carregarOrcamentos() {
-  const raw = localStorage.getItem('orcafacil_orcamentos');
-  orcamentos = raw ? JSON.parse(raw) : [];
-  orcamentos = orcamentos.map(o => ({
-    ...o,
-    midiasLocal: o.midiasLocal || o.fotosLocal || []
-  }));
+async function carregarDadosPersistidos() {
+  try {
+    const data = await apiRequest('/api/dados');
+
+    catalogo = Array.isArray(data && data.catalogo)
+      ? data.catalogo
+      : JSON.parse(JSON.stringify(CATALOGO_PADRAO));
+
+    orcamentos = Array.isArray(data && data.orcamentos) ? data.orcamentos : [];
+    orcamentos = orcamentos.map(o => ({
+      ...o,
+      midiasLocal: o.midiasLocal || o.fotosLocal || []
+    }));
+  } catch (_) {
+    catalogo = JSON.parse(JSON.stringify(CATALOGO_PADRAO));
+    orcamentos = [];
+    mostrarToast('Não foi possível carregar dados do banco agora.');
+  }
 }
 
 function abrirDB() {
@@ -975,8 +1011,7 @@ function esc(str) {
 
 async function init() {
   await abrirDB();
-  carregarCatalogo();
-  carregarOrcamentos();
+  await carregarDadosPersistidos();
   aplicarTema(carregarTema());
   await renderizarListaOrcamentos();
 
