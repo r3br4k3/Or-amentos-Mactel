@@ -84,6 +84,9 @@ let searchProdutoTimer = null;
 let db = null;
 let syncCatalogoTimer = null;
 let syncOrcamentosTimer = null;
+let dialogoResolve = null;
+let dialogoKeyHandler = null;
+let dialogoFocusAnterior = null;
 
 async function apiRequest(url, options = {}) {
   const response = await fetch(url, {
@@ -103,6 +106,183 @@ async function apiRequest(url, options = {}) {
     return response.json();
   }
   return null;
+}
+
+function escAttr(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function fecharDialogo(resultado) {
+  const modal = document.getElementById('modalDialogo');
+  if (!modal || !dialogoResolve) return;
+
+  modal.classList.add('hidden');
+  document.removeEventListener('keydown', dialogoKeyHandler);
+
+  const resolver = dialogoResolve;
+  dialogoResolve = null;
+  dialogoKeyHandler = null;
+
+  if (dialogoFocusAnterior && typeof dialogoFocusAnterior.focus === 'function') {
+    dialogoFocusAnterior.focus();
+  }
+  dialogoFocusAnterior = null;
+
+  resolver(resultado);
+}
+
+function abrirDialogo(options = {}) {
+  const modal = document.getElementById('modalDialogo');
+  const titulo = document.getElementById('dialogoTitulo');
+  const subtitulo = document.getElementById('dialogoSubtitulo');
+  const icone = document.getElementById('dialogoIcone');
+  const mensagem = document.getElementById('dialogoMensagem');
+  const campos = document.getElementById('dialogoCampos');
+  const btnCancelar = document.getElementById('btnDialogoCancelar');
+  const btnConfirmar = document.getElementById('btnDialogoConfirmar');
+
+  const {
+    title = 'Aviso',
+    subtitle = 'Ação do sistema',
+    message = '',
+    icon = '💬',
+    confirmText = 'Confirmar',
+    cancelText = 'Cancelar',
+    hideCancel = false,
+    variant = 'primary',
+    fields = []
+  } = options;
+
+  titulo.textContent = title;
+  subtitulo.textContent = subtitle;
+  icone.textContent = icon;
+  mensagem.textContent = message;
+  btnConfirmar.textContent = confirmText;
+  btnConfirmar.dataset.variant = variant;
+  btnCancelar.textContent = cancelText;
+  btnCancelar.style.display = hideCancel ? 'none' : '';
+
+  campos.innerHTML = fields.map((field, index) => `
+    <div class="dialogo-campo">
+      <label for="dialogoCampo${index}">${esc(field.label)}</label>
+      <input
+        id="dialogoCampo${index}"
+        data-field-name="${escAttr(field.name)}"
+        type="${escAttr(field.type || 'text')}"
+        value="${escAttr(field.value || '')}"
+        placeholder="${escAttr(field.placeholder || '')}"
+        ${field.required ? 'data-required="true"' : ''}
+      />
+    </div>
+  `).join('');
+
+  const coletarValores = () => {
+    const inputs = Array.from(campos.querySelectorAll('input'));
+    const values = {};
+
+    for (const input of inputs) {
+      const obrigatorio = input.dataset.required === 'true';
+      const valor = input.value.trim();
+      input.classList.remove('invalido');
+
+      if (obrigatorio && !valor) {
+        input.classList.add('invalido');
+        input.focus();
+        return null;
+      }
+
+      values[input.dataset.fieldName] = valor;
+    }
+
+    return values;
+  };
+
+  dialogoFocusAnterior = document.activeElement;
+  modal.classList.remove('hidden');
+
+  return new Promise(resolve => {
+    dialogoResolve = resolve;
+
+    btnCancelar.onclick = () => fecharDialogo({ confirmed: false, values: null });
+    btnConfirmar.onclick = () => {
+      const values = coletarValores();
+      if (fields.length && !values) return;
+      fecharDialogo({ confirmed: true, values: values || {} });
+    };
+
+    modal.onclick = e => {
+      if (e.target === modal) {
+        fecharDialogo({ confirmed: false, values: null });
+      }
+    };
+
+    dialogoKeyHandler = e => {
+      if (e.key === 'Escape') {
+        fecharDialogo({ confirmed: false, values: null });
+      }
+
+      if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+        const values = coletarValores();
+        if (fields.length && !values) return;
+        fecharDialogo({ confirmed: true, values: values || {} });
+      }
+    };
+
+    document.addEventListener('keydown', dialogoKeyHandler);
+
+    const primeiroInput = campos.querySelector('input');
+    if (primeiroInput) {
+      primeiroInput.focus();
+      primeiroInput.select();
+    } else {
+      btnConfirmar.focus();
+    }
+  });
+}
+
+async function mostrarAlertaTematico(message, options = {}) {
+  await abrirDialogo({
+    title: options.title || 'Aviso',
+    subtitle: options.subtitle || 'Mensagem do sistema',
+    message,
+    icon: options.icon || '✨',
+    confirmText: options.confirmText || 'Entendi',
+    hideCancel: true,
+    variant: options.variant || 'primary'
+  });
+}
+
+async function mostrarAvisoTematico(message, options = {}) {
+  await mostrarAlertaTematico(message, {
+    title: options.title || 'Atenção',
+    subtitle: options.subtitle || 'Verifique antes de continuar',
+    icon: options.icon || '⚠️',
+    confirmText: options.confirmText || 'Entendi',
+    variant: options.variant || 'primary'
+  });
+}
+
+async function confirmarAcao(message, options = {}) {
+  const result = await abrirDialogo({
+    title: options.title || 'Confirmar ação',
+    subtitle: options.subtitle || 'Confira antes de continuar',
+    message,
+    icon: options.icon || '🛡️',
+    confirmText: options.confirmText || 'Confirmar',
+    cancelText: options.cancelText || 'Cancelar',
+    variant: options.variant || 'primary'
+  });
+
+  return result.confirmed;
+}
+
+async function solicitarCamposDialogo(options = {}) {
+  return abrirDialogo(options);
 }
 
 function salvarTema(tema) {
@@ -144,7 +324,7 @@ function salvarCatalogo() {
     apiRequest('/api/catalogo', {
       method: 'PUT',
       body: JSON.stringify({ catalogo: sem })
-    }).catch(() => mostrarToast('Falha ao sincronizar catálogo no banco.'));
+    }).catch(() => mostrarToast('Falha ao sincronizar catálogo no banco.', { type: 'error', icon: '⚠️' }));
   }, 200);
 }
 
@@ -158,7 +338,7 @@ function salvarOrcamentos() {
     apiRequest('/api/orcamentos', {
       method: 'PUT',
       body: JSON.stringify({ orcamentos: sem })
-    }).catch(() => mostrarToast('Falha ao sincronizar orçamentos no banco.'));
+    }).catch(() => mostrarToast('Falha ao sincronizar orçamentos no banco.', { type: 'error', icon: '⚠️' }));
   }, 200);
 }
 
@@ -178,7 +358,11 @@ async function carregarDadosPersistidos() {
   } catch (_) {
     catalogo = JSON.parse(JSON.stringify(CATALOGO_PADRAO));
     orcamentos = [];
-    mostrarToast('Não foi possível carregar dados do banco agora.');
+    await mostrarAvisoTematico('Não foi possível carregar os dados salvos no banco neste momento. O app abriu com os dados padrão para você continuar trabalhando.', {
+      title: 'Falha ao carregar dados',
+      subtitle: 'O app usou um estado seguro temporário',
+      icon: '🗄️'
+    });
   }
 }
 
@@ -298,7 +482,14 @@ async function renderizarListaOrcamentos(filtro = '') {
   container.querySelectorAll('[data-del]').forEach(btn => {
     btn.addEventListener('click', async e => {
       e.stopPropagation();
-      if (!confirm('Excluir este orçamento?')) return;
+      const confirmado = await confirmarAcao('Esse orçamento será removido da lista local e as mídias dele também serão apagadas.', {
+        title: 'Excluir orçamento',
+        subtitle: 'Esta ação não pode ser desfeita',
+        icon: '🗑️',
+        confirmText: 'Excluir',
+        variant: 'danger'
+      });
+      if (!confirmado) return;
       await excluirOrcamento(btn.dataset.del);
     });
   });
@@ -370,7 +561,7 @@ function salvarOrcamentoAtual() {
     orcamentos.unshift({ ...orcamentoAtual });
   }
   salvarOrcamentos();
-  mostrarToast('Orçamento salvo! 💾');
+  mostrarToast('Orçamento salvo no banco com sucesso.', { type: 'success', icon: '💾' });
 }
 
 function renderizarCategorias() {
@@ -517,11 +708,17 @@ function fecharModalTemp() {
   document.getElementById('modalTemp').classList.add('hidden');
 }
 
-function confirmarTemp() {
+async function confirmarTemp() {
   const nome = document.getElementById('tempNome').value.trim();
   const preco = parseFloat(document.getElementById('tempPreco').value) || 0;
   const qtd = parseInt(document.getElementById('tempQtd').value, 10) || 1;
   if (!nome) {
+    await mostrarAvisoTematico('Informe um nome para o serviço ou produto personalizado antes de adicionar.', {
+      title: 'Nome obrigatório',
+      subtitle: 'Esse item precisa de uma identificação',
+      icon: '🧾',
+      confirmText: 'Vou preencher'
+    });
     document.getElementById('tempNome').focus();
     return;
   }
@@ -648,7 +845,7 @@ function removerProdutoDosOrcamentos(prodId) {
 function abrirModalCatalogo() {
   preencherSelectCategoriaCat();
   document.getElementById('catNome').value = '';
-  document.getElementById('catFoto').value = '';
+  limparFotoCatalogoSelecionada();
   const preview = document.getElementById('catFotoPreview');
   preview.classList.add('hidden');
   preview.src = '';
@@ -663,6 +860,24 @@ function fecharModalCatalogo() {
 function preencherSelectCategoriaCat() {
   const sel = document.getElementById('selectCategoriaCat');
   sel.innerHTML = catalogo.map(c => `<option value="${c.id}">${c.emoji} ${esc(c.nome)}</option>`).join('');
+}
+
+function obterArquivoFotoCatalogoSelecionado() {
+  const fotoCamera = document.getElementById('catFotoCamera');
+  const fotoGaleria = document.getElementById('catFotoGaleria');
+  return (fotoCamera.files && fotoCamera.files[0]) || (fotoGaleria.files && fotoGaleria.files[0]) || null;
+}
+
+function limparFotoCatalogoSelecionada() {
+  document.getElementById('catFotoCamera').value = '';
+  document.getElementById('catFotoGaleria').value = '';
+}
+
+async function atualizarPreviewFotoCatalogo(file) {
+  if (!file) return;
+  const preview = document.getElementById('catFotoPreview');
+  preview.src = await fileToDataUrl(file);
+  preview.classList.remove('hidden');
 }
 
 async function renderizarListaProdutosCat() {
@@ -714,6 +929,12 @@ async function confirmarCat() {
   const catId = document.getElementById('selectCategoriaCat').value;
   const nome = document.getElementById('catNome').value.trim();
   if (!nome) {
+    await mostrarAvisoTematico('Digite o nome do produto antes de salvar no catálogo.', {
+      title: 'Produto sem nome',
+      subtitle: 'O catálogo precisa dessa informação',
+      icon: '📦',
+      confirmText: 'Vou preencher'
+    });
     document.getElementById('catNome').focus();
     return;
   }
@@ -723,17 +944,17 @@ async function confirmarCat() {
   const prodId = `p-custom-${Date.now()}`;
   cat.produtos.push({ id: prodId, nome, fotoUrl: null });
 
-  const fotoInput = document.getElementById('catFoto');
-  if (fotoInput.files[0]) {
-    const dataUrl = await fileToDataUrl(fotoInput.files[0]);
-    await dbSet('fotosProd', prodId, dataUrl, fotoInput.files[0].type || 'image/*');
+  const fotoSelecionada = obterArquivoFotoCatalogoSelecionado();
+  if (fotoSelecionada) {
+    const dataUrl = await fileToDataUrl(fotoSelecionada);
+    await dbSet('fotosProd', prodId, dataUrl, fotoSelecionada.type || 'image/*');
   }
 
   salvarCatalogo();
   salvarOrcamentos();
-  mostrarToast(`Produto "${nome}" adicionado! ✅`);
+  mostrarToast(`Produto "${nome}" adicionado ao catálogo.`, { type: 'success', icon: '✅' });
   document.getElementById('catNome').value = '';
-  document.getElementById('catFoto').value = '';
+  limparFotoCatalogoSelecionada();
   const preview = document.getElementById('catFotoPreview');
   preview.classList.add('hidden');
   preview.src = '';
@@ -745,10 +966,22 @@ async function confirmarCat() {
   }
 }
 
-function pedirNovaCategoria() {
-  const nome = prompt('Nome da nova seção:');
-  if (!nome || !nome.trim()) return;
-  const emoji = prompt('Emoji da seção (ex: 🏠):', '📦') || '📦';
+async function pedirNovaCategoria() {
+  const result = await solicitarCamposDialogo({
+    title: 'Nova seção',
+    subtitle: 'Organize seu catálogo',
+    message: 'Defina o nome e o emoji da nova seção para manter o catálogo consistente.',
+    icon: '🧩',
+    confirmText: 'Criar seção',
+    fields: [
+      { name: 'nome', label: 'Nome da seção', value: '', placeholder: 'Ex: Automação residencial', required: true },
+      { name: 'emoji', label: 'Emoji', value: '📦', placeholder: 'Ex: 🏠', required: true }
+    ]
+  });
+  if (!result.confirmed) return;
+
+  const nome = result.values.nome;
+  const emoji = result.values.emoji || '📦';
   const id = 'cat-' + Date.now();
   catalogo.push({ id, nome: nome.trim(), emoji: emoji.trim(), produtos: [] });
   salvarCatalogo();
@@ -756,30 +989,50 @@ function pedirNovaCategoria() {
   document.getElementById('selectCategoriaCat').value = id;
   renderizarListaProdutosCat();
   renderizarCategorias();
-  mostrarToast(`Seção "${nome}" criada!`);
+  mostrarToast(`Seção "${nome}" criada com sucesso.`, { type: 'success', icon: '🧩' });
 }
 
-function renomearCategoriaSelecionada() {
+async function renomearCategoriaSelecionada() {
   const sel = document.getElementById('selectCategoriaCat');
   const cat = catalogo.find(c => c.id === sel.value);
   if (!cat) return;
-  const novoNome = prompt('Novo nome da seção:', cat.nome);
-  if (!novoNome || !novoNome.trim()) return;
-  const novoEmoji = prompt('Novo emoji da seção:', cat.emoji) || cat.emoji;
+
+  const result = await solicitarCamposDialogo({
+    title: 'Editar seção',
+    subtitle: 'Atualize os dados da categoria',
+    message: 'Altere o nome e o emoji para manter a navegação clara no catálogo.',
+    icon: '✏️',
+    confirmText: 'Salvar alterações',
+    fields: [
+      { name: 'nome', label: 'Nome da seção', value: cat.nome, required: true },
+      { name: 'emoji', label: 'Emoji', value: cat.emoji || '📦', required: true }
+    ]
+  });
+  if (!result.confirmed) return;
+
+  const novoNome = result.values.nome;
+  const novoEmoji = result.values.emoji || cat.emoji;
   cat.nome = novoNome.trim();
   cat.emoji = novoEmoji.trim() || cat.emoji;
   salvarCatalogo();
   preencherSelectCategoriaCat();
   sel.value = cat.id;
   renderizarCategorias();
-  mostrarToast('Seção atualizada!');
+  mostrarToast('Seção atualizada.', { type: 'success', icon: '✏️' });
 }
 
 async function excluirCategoriaSelecionada() {
   const sel = document.getElementById('selectCategoriaCat');
   const cat = catalogo.find(c => c.id === sel.value);
   if (!cat) return;
-  if (!confirm(`Excluir a seção "${cat.nome}" e todos os produtos dela?`)) return;
+  const confirmado = await confirmarAcao(`A seção "${cat.nome}" e todos os produtos dela serão removidos.`, {
+    title: 'Excluir seção',
+    subtitle: 'Os produtos vinculados também serão apagados',
+    icon: '⚠️',
+    confirmText: 'Excluir seção',
+    variant: 'danger'
+  });
+  if (!confirmado) return;
 
   for (const prod of cat.produtos) {
     await dbDelete('fotosProd', prod.id);
@@ -800,14 +1053,26 @@ async function excluirCategoriaSelecionada() {
   await renderizarProdutos(document.getElementById('searchProdutos').value.trim());
   await renderizarListaProdutosCat();
   atualizarResumo();
-  mostrarToast('Seção excluída.');
+  mostrarToast('Seção excluída.', { type: 'info', icon: '🗑️' });
 }
 
-function renomearProduto(prodId) {
+async function renomearProduto(prodId) {
   const prod = localizarProduto(prodId);
   if (!prod) return;
-  const novoNome = prompt('Novo nome do produto:', prod.nome);
-  if (!novoNome || !novoNome.trim()) return;
+
+  const result = await solicitarCamposDialogo({
+    title: 'Renomear produto',
+    subtitle: 'Atualize o nome exibido no catálogo',
+    message: 'O novo nome também será refletido nos orçamentos já existentes.',
+    icon: '🏷️',
+    confirmText: 'Salvar nome',
+    fields: [
+      { name: 'nome', label: 'Nome do produto', value: prod.nome, required: true }
+    ]
+  });
+  if (!result.confirmed) return;
+
+  const novoNome = result.values.nome;
 
   const cat = catalogo.find(c => c.id === prod.catId);
   const alvo = cat ? cat.produtos.find(p => p.id === prodId) : null;
@@ -819,13 +1084,20 @@ function renomearProduto(prodId) {
   renderizarListaProdutosCat();
   renderizarProdutos(document.getElementById('searchProdutos').value.trim());
   atualizarResumo();
-  mostrarToast('Nome do produto atualizado.');
+  mostrarToast('Nome do produto atualizado.', { type: 'success', icon: '🏷️' });
 }
 
 async function excluirProduto(prodId) {
   const prod = localizarProduto(prodId);
   if (!prod) return;
-  if (!confirm(`Excluir o produto "${prod.nome}"?`)) return;
+  const confirmado = await confirmarAcao(`O produto "${prod.nome}" será removido do catálogo e dos orçamentos.`, {
+    title: 'Excluir produto',
+    subtitle: 'Essa remoção afeta itens já cadastrados',
+    icon: '🧨',
+    confirmText: 'Excluir produto',
+    variant: 'danger'
+  });
+  if (!confirmado) return;
 
   const cat = catalogo.find(c => c.id === prod.catId);
   if (!cat) return;
@@ -837,13 +1109,14 @@ async function excluirProduto(prodId) {
   await renderizarListaProdutosCat();
   await renderizarProdutos(document.getElementById('searchProdutos').value.trim());
   atualizarResumo();
-  mostrarToast('Produto excluído.');
+  mostrarToast('Produto excluído.', { type: 'info', icon: '🧨' });
 }
 
 function trocarFotoProduto(prodId) {
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = 'image/*';
+  input.capture = 'environment';
   input.onchange = async () => {
     const file = input.files && input.files[0];
     if (!file) return;
@@ -851,12 +1124,12 @@ function trocarFotoProduto(prodId) {
     await dbSet('fotosProd', prodId, dataUrl, file.type || 'image/*');
     await renderizarListaProdutosCat();
     await renderizarProdutos(document.getElementById('searchProdutos').value.trim());
-    mostrarToast('Foto do produto atualizada.');
+    mostrarToast('Foto do produto atualizada.', { type: 'success', icon: '📷' });
   };
   input.click();
 }
 
-function enviarWhatsapp() {
+async function enviarWhatsapp() {
   const nome = document.getElementById('nomeCliente').value.trim() || 'Cliente';
   const endereco = document.getElementById('enderecoCliente').value.trim();
   const data = document.getElementById('dataOrcamento').value;
@@ -865,7 +1138,12 @@ function enviarWhatsapp() {
   const qtdMidias = (orcamentoAtual.midiasLocal || []).length;
 
   if (!itens.length) {
-    alert('Adicione ao menos um item antes de enviar.');
+    await mostrarAlertaTematico('Adicione ao menos um item ao orçamento antes de enviar para o WhatsApp.', {
+      title: 'Orçamento vazio',
+      subtitle: 'Nada para compartilhar ainda',
+      icon: '📭',
+      confirmText: 'Vou adicionar'
+    });
     return;
   }
 
@@ -940,7 +1218,11 @@ async function usarLocalizacaoAtual() {
   if (!btn || !inputEndereco) return;
 
   if (!('geolocation' in navigator)) {
-    mostrarToast('Seu dispositivo não suporta geolocalização.');
+    await mostrarAvisoTematico('Seu dispositivo ou navegador não oferece suporte à geolocalização para preencher o endereço automaticamente.', {
+      title: 'Geolocalização indisponível',
+      subtitle: 'Preencha o endereço manualmente',
+      icon: '📍'
+    });
     return;
   }
 
@@ -973,13 +1255,17 @@ async function usarLocalizacaoAtual() {
 
     inputEndereco.value = endereco;
     if (orcamentoAtual) orcamentoAtual.enderecoCliente = endereco;
-    mostrarToast('Localização preenchida com sucesso!');
+    mostrarToast('Localização preenchida com sucesso.', { type: 'success', icon: '📍' });
   } catch (error) {
     let msg = 'Não foi possível obter a localização.';
     if (error && error.code === 1) msg = 'Permissão de localização negada.';
     if (error && error.code === 2) msg = 'Localização indisponível no momento.';
     if (error && error.code === 3) msg = 'Tempo de localização esgotado.';
-    mostrarToast(msg);
+    await mostrarAvisoTematico(msg, {
+      title: 'Falha ao localizar',
+      subtitle: 'O preenchimento automático não foi concluído',
+      icon: '🛰️'
+    });
   } finally {
     btn.disabled = false;
     btn.textContent = textoOriginal;
@@ -987,18 +1273,24 @@ async function usarLocalizacaoAtual() {
 }
 
 let toastTimer = null;
-function mostrarToast(msg) {
+function mostrarToast(msg, options = {}) {
+  const type = options.type || 'success';
+  const icon = options.icon || (type === 'error' ? '⚠️' : type === 'info' ? 'ℹ️' : '✨');
   let toast = document.getElementById('toast');
   if (!toast) {
     toast = document.createElement('div');
     toast.id = 'toast';
-    toast.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#323232;color:#fff;padding:10px 20px;border-radius:24px;font-size:0.9rem;font-weight:600;z-index:999;box-shadow:0 4px 16px rgba(0,0,0,0.3);opacity:0;transition:opacity 0.2s;pointer-events:none;white-space:nowrap;';
+    toast.className = 'toast-app';
+    toast.innerHTML = '<span class="toast-app-icone"></span><span class="toast-app-texto"></span>';
     document.body.appendChild(toast);
   }
-  toast.textContent = msg;
-  toast.style.opacity = '1';
+
+  toast.dataset.type = type;
+  toast.querySelector('.toast-app-icone').textContent = icon;
+  toast.querySelector('.toast-app-texto').textContent = msg;
+  toast.classList.add('visivel');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { toast.style.opacity = '0'; }, 2200);
+  toastTimer = setTimeout(() => { toast.classList.remove('visivel'); }, 2200);
 }
 
 function esc(str) {
@@ -1036,7 +1328,9 @@ async function init() {
     }, 180);
   });
 
-  document.getElementById('inputMidia').addEventListener('change', onMidiaSelecionada);
+  document.getElementById('inputFotoCamera').addEventListener('change', onMidiaSelecionada);
+  document.getElementById('inputVideoCamera').addEventListener('change', onMidiaSelecionada);
+  document.getElementById('inputMidiaGaleria').addEventListener('change', onMidiaSelecionada);
 
   document.getElementById('btnAddTemp').addEventListener('click', abrirModalTemp);
   document.getElementById('btnCancelTemp').addEventListener('click', fecharModalTemp);
@@ -1056,13 +1350,14 @@ async function init() {
     if (e.target === document.getElementById('modalCatalogo')) fecharModalCatalogo();
   });
 
-  document.getElementById('catFoto').addEventListener('change', async e => {
+  const onFotoCatalogoSelecionada = async e => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
-    const preview = document.getElementById('catFotoPreview');
-    preview.src = await fileToDataUrl(file);
-    preview.classList.remove('hidden');
-  });
+    await atualizarPreviewFotoCatalogo(file);
+  };
+
+  document.getElementById('catFotoCamera').addEventListener('change', onFotoCatalogoSelecionada);
+  document.getElementById('catFotoGaleria').addEventListener('change', onFotoCatalogoSelecionada);
 
   document.getElementById('tempNome').addEventListener('keydown', e => {
     if (e.key === 'Enter') document.getElementById('tempPreco').focus();

@@ -611,9 +611,17 @@ button { cursor: pointer; border: none; font-family: inherit; transition: var(--
    FOTOS DO LOCAL
 ============================== */
 .fotos-container { margin-bottom: 4px; }
+.midia-acoes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
 .btn-foto {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   background: linear-gradient(135deg, var(--photo-cta-1), var(--photo-cta-2));
   border: 2px dashed var(--accent-dark);
@@ -624,11 +632,17 @@ button { cursor: pointer; border: none; font-family: inherit; transition: var(--
   font-weight: 600;
   cursor: pointer;
   transition: var(--transition);
-  margin-bottom: 10px;
   width: 100%;
-  justify-content: center;
+  min-height: 52px;
+  text-align: center;
 }
 .btn-foto:hover { background: linear-gradient(135deg, var(--photo-cta-2), var(--photo-cta-3)); }
+
+.catalogo-foto-acoes {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
 
 .foto-grid {
   display: grid;
@@ -757,6 +771,175 @@ button { cursor: pointer; border: none; font-family: inherit; transition: var(--
 .modal hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
 .modal-actions { display: flex; gap: 10px; margin-top: 16px; justify-content: flex-end; }
 
+.modal-dialogo {
+  border: 1px solid rgba(79, 143, 247, 0.22);
+  background:
+    linear-gradient(180deg, rgba(79, 143, 247, 0.10), transparent 34%),
+    var(--surface);
+}
+
+.dialogo-topo {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.dialogo-icone {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  background: linear-gradient(135deg, var(--card-grad-1), var(--card-grad-3));
+  box-shadow: inset 0 0 0 1px rgba(79, 143, 247, 0.18), 0 10px 24px rgba(26,115,232,0.14);
+}
+
+.dialogo-subtitulo {
+  color: var(--text-muted);
+  font-size: 0.88rem;
+}
+
+.dialogo-mensagem {
+  color: var(--text);
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+.dialogo-campos {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.dialogo-campo label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.dialogo-campo input {
+  width: 100%;
+  padding: 11px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+  transition: border-color var(--transition), box-shadow var(--transition), background var(--transition);
+}
+
+.dialogo-campo input:focus {
+  border-color: var(--primary);
+  background: var(--surface);
+  box-shadow: 0 0 0 4px rgba(79, 143, 247, 0.12);
+}
+
+.dialogo-campo input.invalido {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 4px rgba(229, 57, 53, 0.12);
+}
+
+.dialogo-acoes {
+  margin-top: 20px;
+}
+
+.dialogo-acoes .btn-confirm[data-variant="danger"] {
+  background: var(--danger);
+}
+
+.dialogo-acoes .btn-confirm[data-variant="danger"]:hover {
+  filter: brightness(0.94);
+}
+
+.toast-app {
+  position: fixed;
+  left: 50%;
+  bottom: 84px;
+  transform: translateX(-50%) translateY(10px);
+  min-width: min(320px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  padding: 12px 16px;
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(79, 143, 247, 0.14), transparent 50%),
+    var(--surface);
+  color: var(--text);
+  border: 1px solid rgba(79, 143, 247, 0.22);
+  box-shadow: 0 14px 34px rgba(8, 18, 38, 0.22);
+  font-size: 0.92rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  z-index: 999;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  backdrop-filter: blur(12px);
+}
+
+.toast-app-icone {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  background: linear-gradient(135deg, var(--card-grad-1), var(--card-grad-3));
+  box-shadow: inset 0 0 0 1px rgba(79, 143, 247, 0.12);
+}
+
+.toast-app-texto {
+  line-height: 1.35;
+}
+
+.toast-app[data-type="success"] {
+  border-color: rgba(46, 207, 115, 0.34);
+  background:
+    linear-gradient(180deg, rgba(46, 207, 115, 0.16), transparent 50%),
+    var(--surface);
+}
+
+.toast-app[data-type="success"] .toast-app-icone {
+  background: linear-gradient(135deg, rgba(46, 207, 115, 0.18), rgba(46, 207, 115, 0.30));
+}
+
+.toast-app[data-type="error"] {
+  border-color: rgba(229, 57, 53, 0.34);
+  background:
+    linear-gradient(180deg, rgba(229, 57, 53, 0.16), transparent 50%),
+    var(--surface);
+}
+
+.toast-app[data-type="error"] .toast-app-icone {
+  background: linear-gradient(135deg, rgba(229, 57, 53, 0.18), rgba(229, 57, 53, 0.30));
+}
+
+.toast-app[data-type="info"] {
+  border-color: rgba(79, 143, 247, 0.34);
+  background:
+    linear-gradient(180deg, rgba(79, 143, 247, 0.16), transparent 50%),
+    var(--surface);
+}
+
+.toast-app[data-type="info"] .toast-app-icone {
+  background: linear-gradient(135deg, rgba(79, 143, 247, 0.18), rgba(79, 143, 247, 0.30));
+}
+
+.toast-app.visivel {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
 @keyframes slideUp {
   from { transform: translateY(40px); opacity: 0; }
   to   { transform: translateY(0);    opacity: 1; }
@@ -768,6 +951,7 @@ button { cursor: pointer; border: none; font-family: inherit; transition: var(--
 .btn-foto-sm {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   background: var(--soft-blue-1);
   border: 1.5px dashed var(--primary);
@@ -788,6 +972,16 @@ button { cursor: pointer; border: none; font-family: inherit; transition: var(--
   border: 1.5px solid var(--border);
 }
 .foto-preview.hidden { display: none; }
+
+@media (max-width: 640px) {
+  .midia-acoes {
+    grid-template-columns: 1fr;
+  }
+
+  .catalogo-foto-acoes {
+    flex-direction: column;
+  }
+}
 
 .lista-produtos-cat {
   display: flex;
