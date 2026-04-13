@@ -389,7 +389,13 @@ function abrirDB() {
 function dbSet(store, chave, dataUrl, tipo) {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(store, 'readwrite');
-    tx.objectStore(store).put({ chave, dataUrl, tipo });
+    const registro = { chave, tipo };
+    if (dataUrl instanceof Blob) {
+      registro.blob = dataUrl;
+    } else {
+      registro.dataUrl = dataUrl;
+    }
+    tx.objectStore(store).put(registro);
     tx.oncomplete = resolve;
     tx.onerror = reject;
   });
@@ -604,7 +610,9 @@ async function renderizarProdutos(filtro) {
 
   const htmlParts = await Promise.all(produtos.map(async p => {
     const fotoRegistro = await dbGet('fotosProd', p.id);
-    const fotoUrl = fotoRegistro ? fotoRegistro.dataUrl : null;
+    const fotoUrl = fotoRegistro
+      ? (fotoRegistro.dataUrl || (fotoRegistro.blob ? URL.createObjectURL(fotoRegistro.blob) : null))
+      : null;
     const fotoHtml = fotoUrl
       ? `<img class="produto-foto" src="${fotoUrl}" alt="${esc(p.nome)}" />`
       : '<div class="produto-foto-placeholder">📦</div>';
@@ -739,9 +747,17 @@ async function onMidiaSelecionada(e) {
   if (!files.length) return;
 
   for (const file of files) {
-    const dataUrl = await fileToDataUrl(file);
+    if (file.size > 80 * 1024 * 1024) {
+      await mostrarAvisoTematico('O vídeo/foto selecionado é muito grande para salvar no app. Use um arquivo menor que 80MB.', {
+        title: 'Arquivo muito grande',
+        subtitle: 'Reduza o tamanho da mídia antes de enviar',
+        icon: '📦'
+      });
+      continue;
+    }
+
     const midiaId = `${orcamentoAtual.id}_midia_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-    await dbSet('midias', midiaId, dataUrl, file.type || 'application/octet-stream');
+    await dbSet('midias', midiaId, file, file.type || 'application/octet-stream');
     orcamentoAtual.midiasLocal.push(midiaId);
   }
 
@@ -777,12 +793,14 @@ async function renderizarMidiasLocal() {
 
   const htmlParts = await Promise.all(midias.map(async midiaId => {
     const registro = await dbGet('midias', midiaId);
-    if (!registro || !registro.dataUrl) return '';
+    if (!registro) return '';
     const tipo = registro.tipo || '';
     const ehVideo = tipo.startsWith('video/');
+    const src = registro.dataUrl || (registro.blob ? URL.createObjectURL(registro.blob) : '');
+    if (!src) return '';
     const mediaTag = ehVideo
-      ? `<video src="${registro.dataUrl}" controls playsinline preload="metadata"></video>`
-      : `<img src="${registro.dataUrl}" alt="mídia do local" />`;
+      ? `<video src="${src}" controls playsinline preload="metadata"></video>`
+      : `<img src="${src}" alt="mídia do local" />`;
 
     return `
       <div class="foto-item">
@@ -895,8 +913,11 @@ async function renderizarListaProdutosCat() {
 
   const htmlParts = await Promise.all(cat.produtos.map(async prod => {
     const foto = await dbGet('fotosProd', prod.id);
+    const fotoSrc = foto ? (foto.dataUrl || (foto.blob ? URL.createObjectURL(foto.blob) : '')) : '';
     const thumb = foto && foto.dataUrl
       ? `<img src="${foto.dataUrl}" class="produto-cat-thumb" alt="thumb" />`
+      : fotoSrc
+        ? `<img src="${fotoSrc}" class="produto-cat-thumb" alt="thumb" />`
       : '<div class="produto-cat-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--text-muted);">📦</div>';
     return `
       <div class="produto-cat-item" data-cat-prod="${prod.id}">
@@ -946,8 +967,7 @@ async function confirmarCat() {
 
   const fotoSelecionada = obterArquivoFotoCatalogoSelecionado();
   if (fotoSelecionada) {
-    const dataUrl = await fileToDataUrl(fotoSelecionada);
-    await dbSet('fotosProd', prodId, dataUrl, fotoSelecionada.type || 'image/*');
+    await dbSet('fotosProd', prodId, fotoSelecionada, fotoSelecionada.type || 'image/*');
   }
 
   salvarCatalogo();
@@ -1120,8 +1140,7 @@ function trocarFotoProduto(prodId) {
   input.onchange = async () => {
     const file = input.files && input.files[0];
     if (!file) return;
-    const dataUrl = await fileToDataUrl(file);
-    await dbSet('fotosProd', prodId, dataUrl, file.type || 'image/*');
+    await dbSet('fotosProd', prodId, file, file.type || 'image/*');
     await renderizarListaProdutosCat();
     await renderizarProdutos(document.getElementById('searchProdutos').value.trim());
     mostrarToast('Foto do produto atualizada.', { type: 'success', icon: '📷' });
